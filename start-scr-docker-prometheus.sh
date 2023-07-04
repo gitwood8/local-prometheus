@@ -2,6 +2,9 @@
 sudo yum update
 sudo yum install -y docker
 sudo systemctl start docker
+sudo systemctl enable docker
+echo "alias d='sudo docker'" >> ~/.bashrc
+source ~/.bashrc
 sudo useradd -rs /bin/false prometheus
 echo $(id -u prometheus):$(id -g prometheus) 
 sudo mkdir /etc/prometheus
