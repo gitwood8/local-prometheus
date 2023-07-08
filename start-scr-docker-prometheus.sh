@@ -1,17 +1,36 @@
-#!/usr/bin/bash
-sudo yum update
-sudo yum install -y docker
-sudo systemctl start docker
-sudo systemctl enable docker
-echo "alias d='sudo docker'" >> ~/.bashrc
-source ~/.bashrc
-sudo useradd -rs /bin/false prometheus
-echo $(id -u prometheus):$(id -g prometheus) 
-sudo mkdir /etc/prometheus
-sudo touch /etc/prometheus/prometheus.yml
-sudo mkdir -p /data/prometheus
-sudo chown prometheus:prometheus /etc/prometheus/* /data/prometheus
-sudo tee /etc/prometheus/prometheus.yml << EOF 
+#!/bin/bash
+yum update
+yum install -y docker
+systemctl start docker
+systemctl enable docker
+usermod -a -G docker ec2-user
+#below works like that &&
+echo "alias d='sudo docker' \n alias ll='ls -lah'" >> /home/ec2-user/.bashrc && source /home/ec2-user/.bashrc
+#useradd -rs /bin/false prometheus
+mkdir -p /prometheus/data
+#chown -R prometheus:prometheus /etc/prometheus/* /data/prometheus
+mkdir /home/ec2-user/app/
+touch /home/ec2-user/app/command.txt
+cat <<EOF> /home/ec2-user/app/command.txt
+sudo docker run --name myprometheus -d --rm -p 9090:9090 --user $(id -u nobody):$(id -g nobody) --net=host -v /etc/prometheus:/etc/prometheus -v /prometheus/data:/prometheus/data prom/prometheus --config.file="/etc/prometheus/prometheus.yml" --storage.tsdb.path="/prometheus/data" 
+EOF
+touch /home/ec2-user/app/Dockerfile
+cat <<EOF> /home/ec2-user/app/Dockerfile
+FROM prom/prometheus
+
+USER $(id -u nobody):$(id -g nobody)
+
+EXPOSE 9090
+
+VOLUME ["/prometheus/data:/prometheus/data", "/etc/prometheus:/etc/prometheus"]
+
+ENTRYPOINT [ "/bin/prometheus" ]
+
+CMD [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus/data" ]
+EOF
+mkdir /etc/prometheus
+touch /etc/prometheus/prometheus.yml
+cat <<EOF> /etc/prometheus/prometheus.yml
 global:
   scrape_interval:     15s
   evaluation_interval: 15s
@@ -21,19 +40,7 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 EOF
-
-mkdir ~/app && touch ~/app/def.txt && tee ~/app/def.txt << EOF
-sudo docker run --name myprometheus -d --rm -p 9090:9090 --user 998:998 --net=host -v /etc/prometheus:/etc/prometheus -v /data/prometheus:/data/prometheus prom/prometheus --config.file="/etc/prometheus/prometheus.yml" --storage.tsdb.path="/data/prometheus"  
-------------------
-FROM prom/prometheus
-
-USER 998:998
-
-EXPOSE 9090
-
-VOLUME ["/data/prometheus:data/prometheus", "/etc/prometheus:etc/prometheus"]
-
-ENTRYPOINT [ "/bin/prometheus" ]
-
-CMD [ "--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/data/prometheus" ]
-EOF
+chown -R nobody:nobody /etc/prometheus/ /prometheus/
+chown -R ec2-user:ec2-user /home/ec2-user/* #/home/ec2-user
+docker build -t prome /home/ec2-user/app/
+docker run -d -p 9090:9090 --name myprometheus --net=host prome
