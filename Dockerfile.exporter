@@ -1,0 +1,11 @@
+FROM prom/node-exporter
+
+USER 65534:65534 #ckeck
+
+EXPOSE 9100
+
+VOLUME ["/host/proc", "/host/sys"]
+
+ENTRYPOINT ["/bin/node_exporter"]
+
+CMD ["--path.procfs", "/host/proc", "--path.sysfs", "/host/sys", "--collector.filesystem.ignored-mount-points", "^/(sys|proc|dev|host|etc)($|/)"]
